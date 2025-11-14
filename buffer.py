@@ -29,7 +29,7 @@ def helius_webhook_handler():
     # Heliusは複数の情報を一度に送ってくる。その一つ一つを解析する。
     for tx in transactions:
         # 我々が本当に知りたい『スワップ』の情報だけを抜き出す。
-        if tx.get("type") == "SWAP" and tx.get("source") == "JUPITER":
+        if tx.get("type") == "SWAP":
             try:
                 # --- 神託の翻訳開始 ---
                 description = tx.get("description", "")
