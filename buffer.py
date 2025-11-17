@@ -3,72 +3,87 @@ import requests
 from flask import Flask, request, jsonify
 
 # --- AIクローン・エンジン（神の目）戦略 ---
-# --- オペレーション：『神託バッファ』 ---
-# --- 最終形態：覚醒 ---
-# 設計者：ジェリー
+# --- 最終形態：ハイブリッド・ゲートキーパー ---
 
 app = Flask(__name__)
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 
-@app.route('/', methods=['POST'])
-def helius_webhook_handler():
-    transactions = request.json
-    print(f"[デバッグ] Heliusから神託を受信。データ数: {len(transactions)}")
+# 【門番の仕事1】UptimeRobotからの生存確認 (GET)
+# これにより、サーバーは常に「起きてます」と返事をし、スリープを防ぐ。
+@app.route('/', methods=['GET'])
+def wake_up_call():
+    return "I am awake. The God Eye is active.", 200
 
+# 【門番の仕事2】Heliusからの神託受信 (POST)
+# ここでスワップ情報を解析し、Discordへ報告する。
+@app.route('/', methods=['POST'])
+def helius_oracle():
     if not DISCORD_WEBHOOK_URL:
         print("[緊急エラー] Discord Webhook URLが設定されていません。")
-        return jsonify({"error": "Discord webhook URL not configured"}), 500
+        return jsonify({"error": "Config missing"}), 500
 
-    for tx in transactions:
-        # あらゆる取引所の『スワップ』を、神託として、認識する。
-        if tx.get("type") == "SWAP":
-            try:
-                # --- 神託の、最終翻訳、開始 ---
+    try:
+        transactions = request.json
+        # データがリストでない場合の保険
+        if not isinstance(transactions, list):
+            transactions = [transactions]
+
+        print(f"[デバッグ] 神託受信。データ数: {len(transactions)}")
+
+        for tx in transactions:
+            # スワップのみを対象とする
+            if tx.get("type") == "SWAP":
                 description = tx.get("description", "")
-                source = tx.get("source", "不明な取引所")
+                source = tx.get("source", "UNKNOWN")
+                signature = tx.get("signature", "")
                 
-                # 行動者（神）のアドレスを、安全に、抜き出す。
-                signer = ""
+                # 神のアドレスを特定
+                signer = "不明"
                 if "swapped" in description:
-                    signer = description.split(" ")[1]
+                    # "User XXXXX swapped..." の形式から抽出
+                    parts = description.split(" ")
+                    if len(parts) > 1:
+                        signer = parts[1]
 
+                # トークン情報の抽出
                 token_transfers = tx.get("tokenTransfers", [])
-                
-                from_token_symbol, to_token_symbol = "不明", "不明"
-                from_amount, to_amount = 0, 0
-                
-                # 生の神託から、本質だけを、抜き出す。
+                from_token = "???"
+                to_token = "???"
+                from_amt = 0
+                to_amt = 0
+
                 for transfer in token_transfers:
+                    # 売ったもの（神の口座から出たもの）
                     if transfer.get("fromUserAccount") == signer:
-                        from_token_symbol = transfer.get("mint")
-                        from_amount = transfer.get("tokenAmount")
+                        from_token = transfer.get("mint", "???")
+                        from_amt = transfer.get("tokenAmount", 0)
+                    # 買ったもの（神の口座に入ったもの）
                     if transfer.get("toUserAccount") == signer:
-                        to_token_symbol = transfer.get("mint")
-                        to_amount = transfer.get("tokenAmount")
+                        to_token = transfer.get("mint", "???")
+                        to_amt = transfer.get("tokenAmount", 0)
 
-                # 全ての情報が、完璧に、揃っている場合のみ、報告する。
-                if signer and from_token_symbol != "不明" and to_token_symbol != "不明":
-                    solscan_link = f"https://solscan.io/tx/{tx.get('signature')}"
-                    
-                    # 司令部へ送る、最終完成版の、報告書。
-                    message = (
-                        f"🚨 **神託受信：スワップ検知** 🚨\n"
-                        f"**----------------------------------**\n"
-                        f"**神:** `{signer}`\n"
-                        f"**取引所:** `{source}`\n"
-                        f"**売却:** `{from_amount}` **{from_token_symbol}**\n"
-                        f"**購入:** `{to_amount}` **{to_token_symbol}**\n"
-                        f"**----------------------------------**\n"
-                        f"**証拠:** [Solscanで確認]({solscan_link})"
-                    )
-                    
-                    payload = {"content": message}
-                    requests.post(DISCORD_WEBHOOK_URL, json=payload)
-                    print(f"[報告完了] {signer}のスワップを司令部へ伝達。")
+                # 報告メッセージの作成
+                solscan_link = f"https://solscan.io/tx/{signature}"
+                
+                msg = (
+                    f"🚨 **神託受信：スワップ検知** 🚨\n"
+                    f"**----------------------------------**\n"
+                    f"**神:** `{signer}`\n"
+                    f"**場所:** `{source}`\n"
+                    f"**売却:** `{from_amt}` (`{from_token}`)\n"
+                    f"**購入:** `{to_amt}` (`{to_token}`)\n"
+                    f"**----------------------------------**\n"
+                    f"**証拠:** [Solscanで追跡]({solscan_link})"
+                )
 
-            except Exception as e:
-                print(f"[最終翻訳エラー] 神託の解析中に致命的なエラー: {e}")
+                # Discordへ送信
+                requests.post(DISCORD_WEBHOOK_URL, json={"content": msg})
+                print(f"[報告完了] {signer} のスワップを通知しました。")
 
+    except Exception as e:
+        print(f"[エラー] 処理中に問題発生: {e}")
+        # エラーが起きてもHeliusには「OK」を返して、再送地獄を防ぐ
+        
     return jsonify({"status": "success"}), 200
 
 if __name__ == "__main__":
