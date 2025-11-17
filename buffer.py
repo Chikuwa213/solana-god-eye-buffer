@@ -10,7 +10,7 @@ from flask import Flask, request, jsonify
 app = Flask(__name__)
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 
-@app.route('/webhook', methods=['POST'])
+@app.route('/', methods=['POST'])
 def helius_webhook_handler():
     transactions = request.json
     print(f"[デバッグ] Heliusから神託を受信。データ数: {len(transactions)}")
